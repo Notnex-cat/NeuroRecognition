@@ -9,8 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "com.notnex.neurorecognition"
-        minSdk = 31
-        targetSdk = 35
+        minSdk = 29
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -68,9 +68,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
 
     implementation(libs.tensorflow.lite)
 
@@ -81,4 +79,7 @@ dependencies {
 
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.camera.camera2)
+
+    implementation(libs.tensorflow.lite.support)
+    implementation(libs.tensorflow.lite.gpu)
 }

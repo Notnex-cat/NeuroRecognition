@@ -30,19 +30,19 @@ class ObjectDetector constructor(
         imgData = DetectorUtils.createImageBuffer(inputSize, isModelQuantized)
 
         interpreter = Interpreter(
-                DetectorUtils.loadModelFile(assetManager, modelFilename),
-                Interpreter.Options()
-                        .setNumThreads(numThreads)
-                        .setUseNNAPI(useNnapi)
+            DetectorUtils.loadModelFile(assetManager, modelFilename),
+            Interpreter.Options()
+                .setNumThreads(numThreads)
+                .setUseNNAPI(useNnapi)
         )
     }
 
     fun detect(pixels: IntArray): List<DetectionResult> {
         DetectorUtils.fillBuffer(
-                imgData = imgData,
-                pixels = pixels,
-                inputSize = inputSize,
-                isModelQuantized = isModelQuantized
+            imgData = imgData,
+            pixels = pixels,
+            inputSize = inputSize,
+            isModelQuantized = isModelQuantized
         )
 
         val inputArray = arrayOf(imgData)
@@ -69,10 +69,10 @@ class ObjectDetector constructor(
             val title = labels[holder.outputClasses[0][i].toInt() + labelOffset]
 
             val location = RectF(
-                    holder.outputLocations[0][i][1] * inputSize,
-                    holder.outputLocations[0][i][0] * inputSize,
-                    holder.outputLocations[0][i][3] * inputSize,
-                    holder.outputLocations[0][i][2] * inputSize
+                holder.outputLocations[0][i][1] * inputSize,
+                holder.outputLocations[0][i][0] * inputSize,
+                holder.outputLocations[0][i][3] * inputSize,
+                holder.outputLocations[0][i][2] * inputSize
             )
 
             result.add(DetectionResult(id = i, title = title, confidence = confidence, location = location))

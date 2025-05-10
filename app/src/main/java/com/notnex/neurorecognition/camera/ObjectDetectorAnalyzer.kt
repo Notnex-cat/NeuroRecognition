@@ -23,115 +23,96 @@ class ObjectDetectorAnalyzer(
 
     companion object {
         private const val TAG = "ObjectDetectorAnalyzer"
-        private const val DEBUG = false
     }
 
     private val iterationCounter = AtomicInteger(0)
 
-    private val debugHelper = DebugHelper(
-            saveResult = false,
-            context = context,
-            resultHeight = config.inputSize,
-            resultWidth = config.inputSize
-    )
 
     private val yuvToRgbConverter = YuvToRgbConverter(context)
-
     private val uiHandler = Handler(Looper.getMainLooper())
-
     private var inputArray = IntArray(config.inputSize * config.inputSize)
-
-    private var objectDetector: ObjectDetector? = null
 
     private var rgbBitmap: Bitmap? = null
     private var resizedBitmap = Bitmap.createBitmap(config.inputSize, config.inputSize, Bitmap.Config.ARGB_8888)
 
-    private var matrixToInput: Matrix? = null
+    // Модель загружается ОДИН раз
+    private var objectDetector: ObjectDetector = ObjectDetector(
+        assetManager = context.assets,
+        isModelQuantized = config.isQuantized,
+        inputSize = config.inputSize,
+        labelFilename = config.labelsFile,
+        modelFilename = config.modelFile,
+        numDetections = config.numDetection,
+        minimumConfidence = config.minimumConfidence,
+        numThreads = 4, // или 1, если слабое устройство
+        useNnapi = true // ускорение через NNAPI (если поддерживается)
+    )
 
     override fun analyze(image: ImageProxy) {
-        val rotationDegrees = image.imageInfo.rotationDegrees
+        try {
+            val rotationDegrees = image.imageInfo.rotationDegrees
 
-        val iteration = iterationCounter.getAndIncrement()
+            val rgbBitmap = getArgbBitmap(image.width, image.height)
+            yuvToRgbConverter.yuvToRgb(image, rgbBitmap)
 
-        val rgbBitmap = getArgbBitmap(image.width, image.height)
+            val transformation = getTransformation(rotationDegrees, image.width, image.height)
 
-        yuvToRgbConverter.yuvToRgb(image, rgbBitmap)
+            Canvas(resizedBitmap).drawBitmap(rgbBitmap, transformation, null)
+            ImageUtil.storePixels(resizedBitmap, inputArray)
 
-        val transformation = getTransformation(rotationDegrees, image.width, image.height)
+//            val start = System.nanoTime()
+              val objects = detect(inputArray)
+//            val elapsed = (System.nanoTime() - start) / 1_000_000
+//            Log.d(TAG, "Detection time: $elapsed ms")
+//
 
-        image.close()
-
-        Canvas(resizedBitmap).drawBitmap(rgbBitmap, transformation, null)
-
-        ImageUtil.storePixels(resizedBitmap, inputArray)
-
-        val objects = detect(inputArray)
-
-        if (DEBUG) {
-            debugHelper.saveResult(iteration, resizedBitmap, objects)
-        }
-
-        Log.d(TAG, "detection objects($iteration): $objects")
-
-        val result = Result(
+            val result = Result(
                 objects = objects,
                 imageWidth = config.inputSize,
                 imageHeight = config.inputSize,
                 imageRotationDegrees = rotationDegrees
-        )
+            )
 
+            uiHandler.post {
+                onDetectionResult.invoke(result)
+            }
 
-
-        uiHandler.post {
-            onDetectionResult.invoke(result)
+        } catch (e: Exception) {
+            Log.e(TAG, "analyze() error: ${e.message}", e)
+        } finally {
+            image.close()
         }
-    }
-
-    private fun getTransformation(rotationDegrees: Int, srcWidth: Int, srcHeight: Int): Matrix {
-        var toInput = matrixToInput
-        if (toInput == null) {
-            toInput = ImageUtil.getTransformMatrix(rotationDegrees, srcWidth, srcHeight, config.inputSize, config.inputSize)
-            matrixToInput = toInput
-        }
-        return toInput
-    }
-
-    private fun getArgbBitmap(width: Int, height: Int): Bitmap {
-        var bitmap = rgbBitmap
-        if (bitmap == null) {
-            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            rgbBitmap = bitmap
-        }
-        return bitmap
     }
 
     private fun detect(inputArray: IntArray): List<DetectionResult> {
-        var detector = objectDetector
-        if (detector == null) {
-            detector = ObjectDetector(
-                    assetManager = context.assets,
-                    isModelQuantized = config.isQuantized,
-                    inputSize = config.inputSize,
-                    labelFilename = config.labelsFile,
-                    modelFilename = config.modelFile,
-                    numDetections = config.numDetection,
-                    minimumConfidence = config.minimumConfidence,
-                    numThreads = 1,
-                    useNnapi = false
-            )
-            objectDetector = detector
-        }
+        // здесь теперь просто используем уже готовый объект
+        return objectDetector.detect(inputArray)
+    }
 
-        return detector.detect(inputArray)
+    private fun getTransformation(rotationDegrees: Int, srcWidth: Int, srcHeight: Int): Matrix {
+        return ImageUtil.getTransformMatrix(
+            rotationDegrees,
+            srcWidth,
+            srcHeight,
+            config.inputSize,
+            config.inputSize
+        )
+    }
+
+    private fun getArgbBitmap(width: Int, height: Int): Bitmap {
+        if (rgbBitmap == null) {
+            rgbBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        }
+        return rgbBitmap!!
     }
 
     data class Config(
-            val minimumConfidence: Float,
-            val numDetection: Int,
-            val inputSize: Int,
-            val isQuantized: Boolean,
-            val modelFile: String,
-            val labelsFile: String
+        val minimumConfidence: Float,
+        val numDetection: Int,
+        val inputSize: Int,
+        val isQuantized: Boolean,
+        val modelFile: String,
+        val labelsFile: String
     )
 
     data class Result(
